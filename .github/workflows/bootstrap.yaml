@@ -7,6 +7,9 @@ on:
       - copilot/**
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
