@@ -61,7 +61,10 @@ Password: printed by the bootstrap script
 
 ### Clean up
 
-The bootstrap script cleans up automatically on exit. If you want to manually
-delete the cluster, run:
+To manually delete the cluster, run:
 
   k3d cluster delete homelab
+
+The cluster persists after the bootstrap script completes, so you can continue
+to use it. In the GitHub Actions workflow, the cluster is automatically deleted
+to keep the environment clean.
