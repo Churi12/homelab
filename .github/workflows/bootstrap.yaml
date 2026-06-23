@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - copilot/**
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
