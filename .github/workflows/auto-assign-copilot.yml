@@ -49,9 +49,9 @@ jobs:
 
           gh api graphql -f query='
             mutation($assignableId:ID!, $actorIds:[ID!]!) {
-              replaceActorsForAssignable(input:{assignableId:$assignableId, actorIds:$actorIds}) {
+              addAssigneesToAssignable(input:{assignableId:$assignableId, assigneeIds:$actorIds}) {
                 assignable { ... on Issue { number } }
               }
-            }' -f assignableId="${ISSUE_NODE_ID}" -f actorIds="${BOT_ID}"
+            }' -f assignableId="${ISSUE_NODE_ID}" -F actorIds="[\"${BOT_ID}\"]"
 
           echo "Assigned Copilot to the issue."
