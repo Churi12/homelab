@@ -25,3 +25,46 @@ Early scaffold. See the open issues for what is being built next.
 
 It is not an always-on cluster. There is no public endpoint to log into. The
 value is reproducibility and the documented learning, not uptime.
+
+## Get started locally
+
+### Prerequisites
+
+You need Docker, k3d, kubectl, and Helm installed on your machine.
+
+- Docker: https://docs.docker.com/get-docker/
+- k3d: https://k3d.io/v5.6.0/#installation
+- kubectl: https://kubernetes.io/docs/tasks/tools/
+- Helm: https://helm.sh/docs/intro/install/
+
+### Run the bootstrap
+
+The bootstrap script creates the cluster, installs ArgoCD, and prints how to
+access the UI.
+
+  git clone https://github.com/Churi12/homelab.git
+  cd homelab
+  chmod +x bootstrap/bootstrap.sh
+  ./bootstrap/bootstrap.sh
+
+### Access ArgoCD
+
+After the bootstrap completes, run this command in another terminal to access
+the ArgoCD UI:
+
+  kubectl port-forward -n argocd svc/argocd-server 8080:443
+
+Then open https://localhost:8080 in your browser.
+
+Username: admin
+Password: printed by the bootstrap script
+
+### Clean up
+
+To manually delete the cluster, run:
+
+  k3d cluster delete homelab
+
+The cluster persists after the bootstrap script completes, so you can continue
+to use it. In the GitHub Actions workflow, the cluster is automatically deleted
+to keep the environment clean.
