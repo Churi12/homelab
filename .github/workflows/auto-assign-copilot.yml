@@ -47,11 +47,12 @@ jobs:
             exit 0
           fi
 
-          gh api graphql -f query='
-            mutation($assignableId:ID!, $actorIds:[ID!]!) {
-              addAssigneesToAssignable(input:{assignableId:$assignableId, assigneeIds:$actorIds}) {
-                assignable { ... on Issue { number } }
-              }
-            }' -f assignableId="${ISSUE_NODE_ID}" -F actorIds="[\"${BOT_ID}\"]"
+          PAYLOAD=$(jq -n \
+            --arg query 'mutation($assignableId:ID!, $actorIds:[ID!]!) { addAssigneesToAssignable(input:{assignableId:$assignableId, assigneeIds:$actorIds}) { assignable { ... on Issue { number } } } }' \
+            --arg assignableId "${ISSUE_NODE_ID}" \
+            --arg botId "${BOT_ID}" \
+            '{query: $query, variables: {assignableId: $assignableId, actorIds: [$botId]}}')
+
+          gh api graphql --input - <<< "${PAYLOAD}"
 
           echo "Assigned Copilot to the issue."
