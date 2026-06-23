@@ -19,7 +19,8 @@ Grafana observability stack.
 
 ## Status
 
-Early scaffold. See the open issues for what is being built next.
+Cluster boots with ArgoCD running and deploys a lightweight observability stack
+(Prometheus + Grafana) via ArgoCD automatically.
 
 ## What this is not
 
@@ -58,6 +59,21 @@ Then open https://localhost:8080 in your browser.
 
 Username: admin
 Password: printed by the bootstrap script
+
+### Access Grafana
+
+The bootstrap script also deploys Prometheus and Grafana through ArgoCD. Once
+the bootstrap completes, run this command in another terminal to access Grafana:
+
+  kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+
+Then open http://localhost:3000 in your browser.
+
+Username: admin
+Password: admin
+
+The default dashboards include cluster resource usage panels (CPU, memory, and
+pod status). Navigate to Dashboards to browse them.
 
 ### Clean up
 

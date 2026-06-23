@@ -57,6 +57,14 @@ jobs:
             deployment/argocd-server \
             -n argocd
 
+      - name: Verify Grafana is healthy
+        run: |
+          kubectl wait --for=condition=available \
+            --timeout=60s \
+            deployment/monitoring-grafana \
+            -n monitoring
+          kubectl get pods -n monitoring
+
       - name: Cleanup
         if: always()
         run: |
