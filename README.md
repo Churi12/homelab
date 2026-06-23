@@ -55,7 +55,6 @@ root app-of-apps Application so ArgoCD discovers and syncs everything in apps/.
 
   git clone https://github.com/Churi12/homelab.git
   cd homelab
-  chmod +x bootstrap/bootstrap.sh
   ./bootstrap/bootstrap.sh
 
 ### Access ArgoCD

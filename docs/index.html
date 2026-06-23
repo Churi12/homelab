@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>homelab</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel hero">
+        <p class="eyebrow">Churi12/homelab</p>
+        <div class="hero-head">
+          <div>
+            <h1>Homelab as code</h1>
+            <p class="lede">
+              This repo defines a reproducible local Kubernetes lab: k3d creates
+              the cluster, ArgoCD applies GitOps, Prometheus and Grafana expose
+              health signals, and a pinned nginx demo app proves workloads sync
+              cleanly both locally and in CI.
+            </p>
+          </div>
+          <a
+            class="badge"
+            href="https://github.com/Churi12/homelab/actions/workflows/bootstrap.yaml"
+          >
+            <img
+              src="https://github.com/Churi12/homelab/actions/workflows/bootstrap.yaml/badge.svg?branch=main"
+              alt="Bootstrap workflow status"
+            >
+          </a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Stack flow</h2>
+        <pre class="diagram" aria-label="Homelab stack diagram">
++-------------------+      +-------------------+      +----------------------+
+| GitHub Actions CI | ---> | k3d + k3s cluster | ---> | ArgoCD root app      |
+| bootstrap.yaml    |      | local Docker lab  |      | GitOps control plane |
++-------------------+      +-------------------+      +----------+-----------+
+                                                                     |
+                                                +--------------------+-------------------+
+                                                |                                        |
+                                      +---------v----------+                   +---------v---------+
+                                      | monitoring app     |                   | demo-app          |
+                                      | Prometheus+Grafana |                   | nginx welcome app |
+                                      +--------------------+                   +-------------------+
+        </pre>
+      </section>
+
+      <section class="panel">
+        <h2>Stack</h2>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Component</th>
+              <th scope="col">Version</th>
+              <th scope="col">Role in this lab</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>k3d</td>
+              <td>v5.6.0</td>
+              <td>Creates the disposable local cluster inside Docker.</td>
+            </tr>
+            <tr>
+              <td>k3s</td>
+              <td>v1.28.6-k3s1</td>
+              <td>Runs the Kubernetes control plane and worker nodes.</td>
+            </tr>
+            <tr>
+              <td>ArgoCD</td>
+              <td>Helm chart 5.46.8</td>
+              <td>Syncs the repo state into the cluster with the app-of-apps pattern.</td>
+            </tr>
+            <tr>
+              <td>Prometheus + Grafana</td>
+              <td>kube-prometheus-stack 55.5.0</td>
+              <td>Provides cluster metrics, dashboards, and quick health checks.</td>
+            </tr>
+            <tr>
+              <td>nginx demo app</td>
+              <td>1.27.0</td>
+              <td>Acts as the sample workload that proves GitOps deployment works.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h2>Run it yourself</h2>
+        <pre class="commands"><code>git clone https://github.com/Churi12/homelab.git
+cd homelab
+./bootstrap/bootstrap.sh</code></pre>
+      </section>
+    </main>
+  </body>
+</html>
