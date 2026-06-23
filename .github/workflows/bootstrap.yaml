@@ -1,3 +1,4 @@
+---
 name: Bootstrap Cluster and ArgoCD
 
 on:
@@ -22,7 +23,9 @@ jobs:
 
       - name: Install k3d
         run: |
-          curl -s https://raw.githubusercontent.com/k3d-io/k3d/v5.6.0/install.sh | bash
+          curl -s \
+            https://raw.githubusercontent.com/k3d-io/k3d/v5.6.0/install.sh \
+            | bash
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v3

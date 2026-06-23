@@ -9,7 +9,6 @@ CLUSTER_NAME="homelab"
 ARGOCD_NAMESPACE="argocd"
 ARGOCD_HELM_CHART_VERSION="5.46.8"
 ARGOCD_HELM_REPO="https://argoproj.github.io/argo-helm"
-K3D_VERSION="v5.6.0"
 
 log() {
   echo "[bootstrap] $*"
