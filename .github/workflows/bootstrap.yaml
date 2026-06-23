@@ -1,0 +1,54 @@
+name: Bootstrap Cluster and ArgoCD
+
+on:
+  push:
+    branches:
+      - main
+      - copilot/**
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install k3d
+        run: |
+          curl -s https://raw.githubusercontent.com/k3d-io/k3d/v5.6.0/install.sh | bash
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.28.6
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.13.0
+
+      - name: Run bootstrap script
+        run: |
+          chmod +x bootstrap/bootstrap.sh
+          CLEANUP_ON_EXIT=false bootstrap/bootstrap.sh
+
+      - name: Verify ArgoCD installation
+        run: |
+          kubectl get deployment -n argocd
+          kubectl get pods -n argocd
+
+      - name: Check ArgoCD server
+        run: |
+          kubectl wait --for=condition=available \
+            --timeout=60s \
+            deployment/argocd-server \
+            -n argocd
+
+      - name: Cleanup
+        if: always()
+        run: |
+          k3d cluster delete homelab || true
