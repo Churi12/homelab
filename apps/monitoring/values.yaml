@@ -1,0 +1,59 @@
+---
+# kube-prometheus-stack values for an ephemeral local lab (k3d, 2-node cluster).
+# Goals: low resource usage, no persistence, Grafana accessible via port-forward.
+
+# Alertmanager is not needed in an ephemeral lab.
+alertmanager:
+  enabled: false
+
+# Node exporter requires host PID and runs as DaemonSet on each k3d node
+# (which is itself a container). Disable to save resources.
+prometheus-node-exporter:
+  enabled: false
+
+# Disable the admission webhook and its certificate management to speed up
+# the install and avoid cert-manager dependencies.
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+
+# Prometheus with no persistence and short retention for ephemeral use.
+prometheus:
+  prometheusSpec:
+    retention: 2h
+    storageSpec: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# Grafana with no persistence. Reachable via port-forward on port 3000.
+# Default credentials: admin / admin
+grafana:
+  adminPassword: admin
+  persistence:
+    enabled: false
+  # Default dashboards include cluster resource usage panels.
+  defaultDashboardsEnabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# kube-state-metrics drives the cluster-resource dashboards in Grafana.
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi

@@ -10,6 +10,9 @@ ARGOCD_NAMESPACE="argocd"
 ARGOCD_HELM_CHART_VERSION="5.46.8"
 ARGOCD_HELM_REPO="https://argoproj.github.io/argo-helm"
 
+MONITORING_NAMESPACE="monitoring"
+GRAFANA_DEPLOYMENT="monitoring-grafana"
+
 log() {
   echo "[bootstrap] $*"
 }
@@ -100,6 +103,50 @@ get_argocd_info() {
   log "  Password: ${ARGOCD_PASSWORD}"
 }
 
+deploy_monitoring() {
+  log "Deploying monitoring stack via ArgoCD..."
+  kubectl apply -f "${REPO_ROOT}/apps/monitoring/application.yaml"
+  log "Monitoring Application manifest applied"
+}
+
+wait_for_monitoring() {
+  log "Waiting for ArgoCD to sync the monitoring stack..."
+
+  local timeout=300
+  local elapsed=0
+  local interval=10
+
+  log "Waiting for Grafana deployment to be created by ArgoCD..."
+  until kubectl get deployment "${GRAFANA_DEPLOYMENT}" \
+        -n "${MONITORING_NAMESPACE}" &>/dev/null; do
+    if [[ ${elapsed} -ge ${timeout} ]]; then
+      log_error "Timed out waiting for Grafana deployment to appear"
+      kubectl get application monitoring -n "${ARGOCD_NAMESPACE}" -o yaml 2>/dev/null || true
+      return 1
+    fi
+    log "  deployment not yet created (${elapsed}s elapsed), retrying..."
+    sleep ${interval}
+    elapsed=$((elapsed + interval))
+  done
+
+  log "Grafana deployment found. Waiting for it to become available..."
+  kubectl wait --for=condition=available \
+    --timeout=300s \
+    "deployment/${GRAFANA_DEPLOYMENT}" \
+    -n "${MONITORING_NAMESPACE}"
+
+  log "Grafana is ready"
+}
+
+get_grafana_info() {
+  log ""
+  log "Grafana is accessible via port-forward:"
+  log "  kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${GRAFANA_DEPLOYMENT} 3000:80"
+  log "  Then open http://localhost:3000 in your browser"
+  log "  Username: admin"
+  log "  Password: admin"
+}
+
 cleanup() {
   log "Deleting cluster ${CLUSTER_NAME}..."
   k3d cluster delete "${CLUSTER_NAME}" || true
@@ -114,6 +161,9 @@ main() {
   install_argocd
   wait_for_argocd
   get_argocd_info
+  deploy_monitoring
+  wait_for_monitoring
+  get_grafana_info
   
   log "Bootstrap complete!"
 }
