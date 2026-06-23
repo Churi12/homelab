@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -42,7 +42,7 @@ check_requirements() {
 create_cluster() {
   log "Creating k3d cluster from ${CLUSTER_CONFIG}..."
   
-  if k3d cluster list | grep -q "^${CLUSTER_NAME}$"; then
+  if k3d cluster get homelab &> /dev/null 2>&1; then
     log "Cluster ${CLUSTER_NAME} already exists, skipping creation"
   else
     k3d cluster create --config "${CLUSTER_CONFIG}"

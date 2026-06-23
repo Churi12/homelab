@@ -16,6 +16,7 @@ ports:
   - port: 6443:6443
     nodeFilters:
       - server:*
+# k3d-default registry is enabled for future workload deployments
 registries:
   use:
     - k3d-default
