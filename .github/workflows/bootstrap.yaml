@@ -65,6 +65,61 @@ jobs:
             -n monitoring
           kubectl get pods -n monitoring
 
+      - name: Apply root app-of-apps and sync to current branch
+        run: |
+          TARGET_REVISION="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
+          echo "ArgoCD target revision: ${TARGET_REVISION}"
+          kubectl apply -f apps/root.yaml
+          kubectl patch application root -n argocd \
+            --type=merge \
+            -p "{\"spec\":{\"source\":{\"targetRevision\":\"${TARGET_REVISION}\"}}}"
+          echo "Root Application applied and configured for branch: ${TARGET_REVISION}"
+
+      - name: Wait for root Application to sync
+        run: |
+          echo "Waiting for root Application to sync..."
+          for i in $(seq 1 60); do
+            STATUS=$(kubectl get application root -n argocd \
+              -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
+            echo "  Root sync status: ${STATUS} (attempt ${i}/60)"
+            if [[ "${STATUS}" == "Synced" ]]; then
+              echo "Root Application is Synced"
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Wait for demo-app Application to be discovered and patch its branch
+        run: |
+          TARGET_REVISION="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"
+          echo "Waiting for demo-app Application to be created by root sync..."
+          for i in $(seq 1 60); do
+            if kubectl get application demo-app -n argocd &>/dev/null 2>&1; then
+              echo "demo-app Application found after ${i} attempts"
+              break
+            fi
+            echo "  Waiting... (attempt ${i}/60)"
+            sleep 5
+          done
+          kubectl patch application demo-app -n argocd \
+            --type=merge \
+            -p "{\"spec\":{\"source\":{\"targetRevision\":\"${TARGET_REVISION}\"}}}"
+          echo "demo-app Application patched for branch: ${TARGET_REVISION}"
+
+      - name: Verify demo app pod is running and healthy
+        run: |
+          echo "Waiting for demo-app pod to be ready..."
+          kubectl wait --for=condition=ready pod \
+            -l app=demo-app \
+            -n demo \
+            --timeout=300s
+          echo "Demo app pod is running"
+          kubectl get pods -n demo
+
+      - name: Show ArgoCD Application statuses
+        run: |
+          kubectl get application -n argocd
+
       - name: Cleanup
         if: always()
         run: |

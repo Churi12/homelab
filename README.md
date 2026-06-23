@@ -27,6 +27,16 @@ Cluster boots with ArgoCD running and deploys a lightweight observability stack
 It is not an always-on cluster. There is no public endpoint to log into. The
 value is reproducibility and the documented learning, not uptime.
 
+## App-of-apps pattern
+
+ArgoCD uses the app-of-apps pattern: one root Application (apps/root.yaml)
+watches the apps/ directory and automatically discovers and syncs every
+Application manifest found there.
+
+To add a new app, drop an ArgoCD Application manifest into apps/ and ArgoCD
+will pick it up on its next sync. The new app points at whatever Kubernetes
+manifests describe that workload.
+
 ## Get started locally
 
 ### Prerequisites
@@ -40,8 +50,8 @@ You need Docker, k3d, kubectl, and Helm installed on your machine.
 
 ### Run the bootstrap
 
-The bootstrap script creates the cluster, installs ArgoCD, and prints how to
-access the UI.
+The bootstrap script creates the cluster, installs ArgoCD, and applies the
+root app-of-apps Application so ArgoCD discovers and syncs everything in apps/.
 
   git clone https://github.com/Churi12/homelab.git
   cd homelab
@@ -74,6 +84,15 @@ Password: admin
 
 The default dashboards include cluster resource usage panels (CPU, memory, and
 pod status). Navigate to Dashboards to browse them.
+
+### Access the demo app
+
+After the bootstrap completes, run this command to reach the nginx demo app:
+
+  kubectl port-forward -n demo svc/demo-app 8888:80
+
+Then open http://localhost:8888 in your browser. You should see the nginx
+welcome page.
 
 ### Clean up
 

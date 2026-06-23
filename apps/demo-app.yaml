@@ -1,0 +1,25 @@
+---
+# Demo application Application manifest.
+# Discovered automatically by the root app-of-apps. Points ArgoCD at the
+# apps/demo-app/ directory which holds the plain Kubernetes manifests.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Churi12/homelab.git
+    targetRevision: HEAD
+    path: apps/demo-app
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
