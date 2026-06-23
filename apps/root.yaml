@@ -1,0 +1,27 @@
+---
+# Root app-of-apps Application.
+# Applied once by the bootstrap script. ArgoCD then discovers every other
+# Application manifest placed in the apps/ directory and syncs it automatically.
+# root.yaml is excluded from the sync so it does not try to manage itself.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Churi12/homelab.git
+    targetRevision: HEAD
+    path: apps
+    directory:
+      # Exclude this file so the root Application does not manage itself.
+      exclude: "root.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true

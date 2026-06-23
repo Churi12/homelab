@@ -89,6 +89,12 @@ wait_for_argocd() {
   log "ArgoCD is healthy"
 }
 
+apply_root_app() {
+  log "Applying root app-of-apps Application..."
+  kubectl apply -f "${REPO_ROOT}/apps/root.yaml"
+  log "Root Application applied. ArgoCD will discover and sync child apps automatically."
+}
+
 get_argocd_info() {
   log "ArgoCD is ready!"
   
@@ -101,6 +107,10 @@ get_argocd_info() {
   log "  Then open https://localhost:8080 in your browser"
   log "  Username: admin"
   log "  Password: ${ARGOCD_PASSWORD}"
+  log ""
+  log "To reach the demo app:"
+  log "  kubectl port-forward -n demo svc/demo-app 8888:80"
+  log "  Then open http://localhost:8888 in your browser"
 }
 
 deploy_monitoring() {
@@ -160,6 +170,7 @@ main() {
   create_cluster
   install_argocd
   wait_for_argocd
+  apply_root_app
   get_argocd_info
   deploy_monitoring
   wait_for_monitoring
