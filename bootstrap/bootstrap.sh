@@ -52,7 +52,19 @@ create_cluster() {
     log "Cluster ${CLUSTER_NAME} created successfully"
   fi
   
-  log "Waiting for cluster to be ready..."
+  log "Waiting for API server to be reachable..."
+  for i in $(seq 1 30); do
+    if kubectl cluster-info &>/dev/null; then
+      break
+    fi
+    if [[ ${i} -eq 30 ]]; then
+      log_error "API server did not become reachable after 60s"
+      exit 1
+    fi
+    sleep 2
+  done
+
+  log "Waiting for nodes to be ready..."
   kubectl wait --for=condition=ready nodes --all --timeout=300s
   log "Cluster is ready"
 }
