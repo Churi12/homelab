@@ -1,5 +1,7 @@
 # homelab
 
+[![Launch in Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Churi12/homelab)
+
 A reproducible homelab as code. Instead of a server running 24/7, this repo
 defines a Kubernetes lab that can be stood up from scratch on demand, validated
 in CI, and torn down. The pipeline is the proof that it works.
@@ -21,6 +23,17 @@ Grafana observability stack.
 
 Cluster boots with ArgoCD running and deploys a lightweight observability stack
 (Prometheus + Grafana) via ArgoCD automatically.
+
+## Launch in Codespaces
+
+Click the Launch in Codespaces badge above to open this repo in a preconfigured
+Codespace. The devcontainer starts with Docker-in-Docker enabled, installs the
+pinned lab CLI versions (k3d v5.6.0, kubectl v1.28.6, helm v3.13.0), and runs
+`bootstrap/bootstrap.sh` automatically.
+
+After creation, the full lab should be ready in about 2 minutes, with ArgoCD,
+Grafana, and the demo app accessible from the Codespaces Ports tab. No manual
+port-forward commands are needed in Codespaces because ports are auto-forwarded.
 
 ## What this is not
 
