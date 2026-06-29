@@ -1,0 +1,36 @@
+# kube-linter configuration for the homelab.
+# Uses all built-in checks and disables the ones that are intentionally
+# relaxed for a single-replica demo environment. Each exclusion explains why.
+#
+#   default-service-account    homelab has no workload identity requirements
+#   dnsconfig-options          default cluster DNS is fine for a lab
+#   no-liveness-probe          demo app is ephemeral; restarts are acceptable
+#   no-node-affinity           single-node cluster has nowhere to spread
+#   no-readiness-probe         demo app is ephemeral; no traffic-shaping needed
+#   no-rolling-update-strategy homelab, not production; restart policy is fine
+#   non-isolated-pod           no NetworkPolicy needed in an isolated lab cluster
+#   privileged-ports           nginx binds port 80 by design
+#   run-as-non-root            nginx listens on port 80 and runs as root
+#   no-read-only-root-fs       nginx writes to /var/cache/nginx and /var/run
+#   minimum-three-replicas     this is a one-node homelab, not production
+#   no-anti-affinity           single-node cluster has nowhere to spread replicas
+#   required-annotation-email  personal lab, no team email annotation needed
+#   required-label-owner       personal lab, owner is implicit
+
+checks:
+  addAllBuiltIn: true
+  exclude:
+    - "default-service-account"
+    - "dnsconfig-options"
+    - "no-liveness-probe"
+    - "no-node-affinity"
+    - "no-readiness-probe"
+    - "no-rolling-update-strategy"
+    - "non-isolated-pod"
+    - "privileged-ports"
+    - "run-as-non-root"
+    - "no-read-only-root-fs"
+    - "minimum-three-replicas"
+    - "no-anti-affinity"
+    - "required-annotation-email"
+    - "required-label-owner"

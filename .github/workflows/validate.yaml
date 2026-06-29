@@ -1,0 +1,92 @@
+---
+# Fast manifest validation job.
+# Runs in parallel with the bootstrap job and catches typos and schema
+# violations in seconds, before any cluster is created.
+#
+# Tools and pinned versions:
+#   kubeconform  v0.6.7   validates manifests against Kubernetes JSON schemas
+#   helm         v3.13.0  lints the monitoring chart values
+#   kube-linter  v0.6.8   checks plain manifests for common best-practice issues
+name: Validate Manifests
+
+on:
+  push:
+    branches:
+      - main
+      - copilot/**
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  KUBECONFORM_VERSION: v0.6.7
+  KUBELINTER_VERSION: v0.6.8
+
+jobs:
+  validate:
+    name: Validate Kubernetes manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # kubeconform validates every manifest against the official Kubernetes
+      # JSON schemas plus the ArgoCD CRD schemas from the datreeio catalog.
+      # Resources whose schema is not found (e.g. k3d Simple) are skipped.
+      - name: Install kubeconform v0.6.7
+        run: |
+          curl -fsSL \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Validate manifests with kubeconform
+        run: |
+          # Only pass files that have an apiVersion field so plain values files
+          # (which have no apiVersion/kind) are excluded automatically.
+          find apps/ clusters/ \( -name '*.yaml' -o -name '*.yml' \) \
+            | xargs grep -l '^apiVersion:' \
+            | xargs kubeconform \
+                -strict \
+                -ignore-missing-schemas \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+                -summary
+
+      # Helm lint validates that the monitoring values file is compatible with
+      # the chart structure. The chart is pulled at the pinned version used by
+      # the ArgoCD Application so the check is identical to what ArgoCD sees.
+      - name: Install Helm v3.13.0
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.13.0
+
+      - name: Lint monitoring Helm values
+        run: |
+          helm repo add prometheus-community \
+            https://prometheus-community.github.io/helm-charts
+          helm repo update prometheus-community
+          helm pull prometheus-community/kube-prometheus-stack \
+            --version 55.5.0 --untar --untardir /tmp/charts
+          helm lint /tmp/charts/kube-prometheus-stack \
+            --values apps/monitoring/values.yaml
+
+      # kube-linter checks the plain Kubernetes workload manifests for common
+      # security and correctness issues. The .kube-linter.yaml config in the
+      # repo root scopes the checks to what is appropriate for a homelab.
+      - name: Install kube-linter v0.6.8
+        run: |
+          curl -fsSL \
+            "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
+            | tar xz -C /tmp kube-linter
+          sudo mv /tmp/kube-linter /usr/local/bin/kube-linter
+          kube-linter version
+
+      - name: Run kube-linter on plain Kubernetes manifests
+        run: |
+          kube-linter lint apps/demo-app/
