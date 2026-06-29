@@ -1,0 +1,23 @@
+# kube-linter configuration for the homelab.
+# Uses all built-in checks and disables the ones that are intentionally
+# relaxed for a single-replica demo environment:
+#
+#   liveness-probe / readiness-probe  the nginx demo app is ephemeral
+#   run-as-non-root                   nginx listens on port 80 and runs as root
+#   no-read-only-root-fs              nginx writes to /var/cache/nginx
+#   minimum-three-replicas            this is a one-node homelab, not production
+#   no-anti-affinity                  single-node cluster has nowhere to spread
+#   required-annotation-email         personal lab, no team email needed
+#   required-label-owner              personal lab, owner is implicit
+
+checks:
+  addAllBuiltIn: true
+  exclude:
+    - "liveness-probe"
+    - "readiness-probe"
+    - "run-as-non-root"
+    - "no-read-only-root-fs"
+    - "minimum-three-replicas"
+    - "no-anti-affinity"
+    - "required-annotation-email"
+    - "required-label-owner"

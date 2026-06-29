@@ -106,6 +106,45 @@ After the bootstrap completes, run this command to reach the nginx demo app:
 Then open http://localhost:8888 in your browser. You should see the nginx
 welcome page.
 
+### Validate manifests locally
+
+The CI runs a fast validation job before the cluster boots. You can run the
+same checks on your machine without Docker or a cluster.
+
+Install the tools once (pinned to the same versions used in CI):
+
+  KUBECONFORM_VERSION=v0.6.7
+  curl -fsSL \
+    "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+    | tar xz -C /usr/local/bin kubeconform
+
+  KUBELINTER_VERSION=v0.6.8
+  curl -fsSL \
+    "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
+    | tar xz -C /tmp kube-linter && sudo mv /tmp/kube-linter /usr/local/bin/
+
+Then run the three validation steps from the repo root:
+
+  # 1. Validate all Kubernetes manifests (including ArgoCD Application CRDs)
+  find apps/ clusters/ \( -name '*.yaml' -o -name '*.yml' \) \
+    | xargs grep -l '^apiVersion:' \
+    | xargs kubeconform -strict -ignore-missing-schemas \
+        -schema-location default \
+        -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+        -summary
+
+  # 2. Lint the monitoring chart values against the pinned chart version
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm repo update prometheus-community
+  helm pull prometheus-community/kube-prometheus-stack \
+    --version 55.5.0 --untar --untardir /tmp/charts
+  helm lint /tmp/charts/kube-prometheus-stack --values apps/monitoring/values.yaml
+
+  # 3. Check plain Kubernetes manifests for best-practice issues
+  kube-linter lint apps/demo-app/
+
+All three steps must exit 0 before opening a pull request.
+
 ### Clean up
 
 To manually delete the cluster, run:
