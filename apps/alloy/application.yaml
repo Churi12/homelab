@@ -1,0 +1,117 @@
+---
+# Grafana Alloy ArgoCD Application.
+# Deploys Alloy as a DaemonSet to collect pod logs from every node
+# and ship them to Loki running in the logging namespace.
+# Chart: grafana/alloy 0.5.1  App: Alloy v1.2.1
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 0.5.1
+    helm:
+      values: |
+        # DaemonSet is the default controller type; one Alloy pod per node.
+        controller:
+          type: daemonset
+
+        alloy:
+          # Mount /var/log from the host so Alloy can tail pod log files.
+          mounts:
+            varlog: true
+            dockercontainers: false
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+          # River pipeline: discover pod logs, relabel, tail files, push to Loki.
+          configMap:
+            content: |
+              // Discover all Kubernetes pods via the API server.
+              discovery.kubernetes "pods" {
+                role = "pod"
+              }
+
+              // Relabel pod metadata into useful log stream labels and build
+              // the host filesystem path for each container log file.
+              discovery.relabel "pod_logs" {
+                targets = discovery.kubernetes.pods.targets
+
+                // Drop pods that are not in a running phase.
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_phase"]
+                  regex         = "Pending|Succeeded|Failed|Completed"
+                  action        = "drop"
+                }
+
+                // Build the log file path:
+                //   /var/log/pods/<ns>_<name>_<uid>/<container>/<n>.log
+                // The wildcard before the UID matches the "<ns>_<name>_" prefix.
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_uid",
+                                   "__meta_kubernetes_pod_container_name"]
+                  separator     = "/"
+                  target_label  = "__path__"
+                  replacement   = "/var/log/pods/*$1/*.log"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label  = "namespace"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label  = "pod"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_container_name"]
+                  target_label  = "container"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_node_name"]
+                  target_label  = "node"
+                }
+
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  target_label  = "app"
+                }
+              }
+
+              // Tail the log files discovered above.
+              loki.source.file "pod_logs" {
+                targets    = discovery.relabel.pod_logs.output
+                forward_to = [loki.write.default.receiver]
+              }
+
+              // Push logs to Loki in the logging namespace.
+              loki.write "default" {
+                endpoint {
+                  url = "http://loki.logging.svc.cluster.local:3100/loki/api/v1/push"
+                }
+              }
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

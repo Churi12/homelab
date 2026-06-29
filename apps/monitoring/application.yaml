@@ -50,6 +50,15 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
+          # Loki datasource so logs appear in Grafana Explore alongside metrics.
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.logging.svc.cluster.local:3100
+              access: proxy
+              isDefault: false
+              jsonData:
+                maxLines: 1000
 
         kube-state-metrics:
           resources:

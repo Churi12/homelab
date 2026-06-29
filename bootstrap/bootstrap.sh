@@ -12,6 +12,8 @@ ARGOCD_HELM_REPO="https://argoproj.github.io/argo-helm"
 
 MONITORING_NAMESPACE="monitoring"
 GRAFANA_DEPLOYMENT="monitoring-grafana"
+LOGGING_NAMESPACE="logging"
+LOKI_STATEFULSET="loki"
 
 log() {
   echo "[bootstrap] $*"
@@ -131,6 +133,13 @@ deploy_monitoring() {
   log "Monitoring Application manifest applied"
 }
 
+deploy_logging() {
+  log "Deploying Loki and Alloy via ArgoCD..."
+  kubectl apply -f "${REPO_ROOT}/apps/loki/application.yaml"
+  kubectl apply -f "${REPO_ROOT}/apps/alloy/application.yaml"
+  log "Loki and Alloy Application manifests applied"
+}
+
 wait_for_monitoring() {
   log "Waiting for ArgoCD to sync the monitoring stack..."
 
@@ -160,6 +169,35 @@ wait_for_monitoring() {
   log "Grafana is ready"
 }
 
+wait_for_loki() {
+  log "Waiting for Loki to be ready..."
+
+  local timeout=300
+  local elapsed=0
+  local interval=10
+
+  log "Waiting for Loki StatefulSet pod to be created by ArgoCD..."
+  until kubectl get statefulset "${LOKI_STATEFULSET}" \
+        -n "${LOGGING_NAMESPACE}" &>/dev/null; do
+    if [[ ${elapsed} -ge ${timeout} ]]; then
+      log_error "Timed out waiting for Loki StatefulSet to appear"
+      kubectl get application loki -n "${ARGOCD_NAMESPACE}" -o yaml 2>/dev/null || true
+      return 1
+    fi
+    log "  StatefulSet not yet created (${elapsed}s elapsed), retrying..."
+    sleep ${interval}
+    elapsed=$((elapsed + interval))
+  done
+
+  log "Loki StatefulSet found. Waiting for pod to become ready..."
+  kubectl wait --for=condition=ready pod \
+    -l app.kubernetes.io/name=loki \
+    -n "${LOGGING_NAMESPACE}" \
+    --timeout=300s
+
+  log "Loki is ready"
+}
+
 get_grafana_info() {
   log ""
   log "Grafana is accessible via port-forward:"
@@ -187,6 +225,8 @@ main() {
   deploy_monitoring
   wait_for_monitoring
   get_grafana_info
+  deploy_logging
+  wait_for_loki
   
   log "Bootstrap complete!"
 }

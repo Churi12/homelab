@@ -1,0 +1,122 @@
+---
+# Loki ArgoCD Application.
+# Deploys Loki in single-binary (monolithic) mode with local filesystem storage.
+# No object store, no S3, no cloud dependencies.
+# Chart: grafana/loki 6.7.4  App: Loki 3.1.0
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: loki
+    targetRevision: 6.7.4
+    helm:
+      values: |
+        # Single-binary mode: one pod handles all Loki roles.
+        # Simplest setup for a local lab; no HA, no sharding.
+        deploymentMode: SingleBinary
+
+        loki:
+          # Disable multi-tenancy; every request uses the default tenant.
+          auth_enabled: false
+
+          commonConfig:
+            replication_factor: 1
+
+          # Use local filesystem instead of an object store.
+          storage:
+            type: filesystem
+
+          schemaConfig:
+            configs:
+              - from: "2024-01-01"
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index:
+                  prefix: loki_index_
+                  period: 24h
+
+        # One replica handles all reads and writes.
+        singleBinary:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          persistence:
+            enabled: true
+            size: 1Gi
+
+        # Zero out all distributed-mode components (not needed in single-binary).
+        backend:
+          replicas: 0
+        read:
+          replicas: 0
+        write:
+          replicas: 0
+        ingester:
+          replicas: 0
+        querier:
+          replicas: 0
+        queryFrontend:
+          replicas: 0
+        queryScheduler:
+          replicas: 0
+        distributor:
+          replicas: 0
+        compactor:
+          replicas: 0
+        indexGateway:
+          replicas: 0
+        bloomCompactor:
+          replicas: 0
+        bloomGateway:
+          replicas: 0
+
+        # Disable caches (they require Memcached sidecars).
+        chunksCache:
+          enabled: false
+        resultsCache:
+          enabled: false
+
+        # Disable the nginx gateway; Alloy writes directly to port 3100.
+        gateway:
+          enabled: false
+
+        # Disable self-monitoring (Grafana Agent operator not available).
+        monitoring:
+          selfMonitoring:
+            enabled: false
+            grafanaAgent:
+              installOperator: false
+          lokiCanary:
+            enabled: false
+
+        # Disable the Helm test pod.
+        test:
+          enabled: false
+
+        # No MinIO; filesystem storage only.
+        minio:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -116,6 +116,48 @@ jobs:
           echo "Demo app pod is running"
           kubectl get pods -n demo
 
+      - name: Wait for loki Application to be discovered
+        run: |
+          echo "Waiting for loki Application to be created by root sync..."
+          for i in $(seq 1 60); do
+            if kubectl get application loki -n argocd &>/dev/null 2>&1; then
+              echo "loki Application found after ${i} attempts"
+              break
+            fi
+            echo "  Waiting... (attempt ${i}/60)"
+            sleep 5
+          done
+
+      - name: Wait for alloy Application to be discovered
+        run: |
+          echo "Waiting for alloy Application to be created by root sync..."
+          for i in $(seq 1 60); do
+            if kubectl get application alloy -n argocd &>/dev/null 2>&1; then
+              echo "alloy Application found after ${i} attempts"
+              break
+            fi
+            echo "  Waiting... (attempt ${i}/60)"
+            sleep 5
+          done
+
+      - name: Verify Loki and Alloy are healthy
+        run: |
+          echo "Waiting for Loki pod to be ready..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=loki \
+            -n logging \
+            --timeout=120s
+          echo "Loki pod is ready"
+
+          echo "Waiting for Alloy DaemonSet pods to be ready..."
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=alloy \
+            -n logging \
+            --timeout=120s
+          echo "Alloy pods are ready"
+
+          kubectl get pods -n logging
+
       - name: Show ArgoCD Application statuses
         run: |
           kubectl get application -n argocd
