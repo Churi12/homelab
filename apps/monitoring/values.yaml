@@ -32,7 +32,8 @@ prometheus:
         cpu: 500m
         memory: 512Mi
 
-# Grafana with no persistence. Reachable via port-forward on port 3000.
+# Grafana with no persistence. Accessible via Traefik ingress on
+# http://grafana.127.0.0.1.nip.io and via port-forward on port 3000.
 # Default credentials: admin / admin
 grafana:
   adminPassword: admin
@@ -47,6 +48,16 @@ grafana:
     limits:
       cpu: 200m
       memory: 256Mi
+  # Expose Grafana through the Traefik ingress controller that k3s ships.
+  # nip.io resolves grafana.127.0.0.1.nip.io to 127.0.0.1 - no /etc/hosts edits needed.
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - grafana.127.0.0.1.nip.io
+    path: /
+    pathType: Prefix
+    tls: []
 
 # kube-state-metrics drives the cluster-resource dashboards in Grafana.
 kube-state-metrics:

@@ -1,0 +1,21 @@
+---
+# ArgoCD Helm values for local k3d lab.
+# Runs the server in insecure (HTTP) mode so the Traefik ingress controller can
+# forward plain HTTP without needing a TLS passthrough or cert-manager setup.
+configs:
+  params:
+    server.insecure: "true"
+
+server:
+  ingress:
+    enabled: true
+    # Use the Traefik ingress controller that k3s ships by default.
+    ingressClassName: traefik
+    hosts:
+      - argocd.127.0.0.1.nip.io
+    paths:
+      - /
+    pathType: Prefix
+    # HTTP only - no TLS for local lab use.
+    https: false
+    tls: []
