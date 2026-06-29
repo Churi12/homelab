@@ -83,6 +83,7 @@ install_argocd() {
   helm upgrade --install argocd argo/argo-cd \
     --namespace "${ARGOCD_NAMESPACE}" \
     --version "${ARGOCD_HELM_CHART_VERSION}" \
+    --values "${REPO_ROOT}/bootstrap/argocd-values.yaml" \
     --wait
   
   log "ArgoCD installed"
@@ -114,11 +115,14 @@ get_argocd_info() {
   
   log "ArgoCD admin password: ${ARGOCD_PASSWORD}"
   log ""
-  log "To access ArgoCD UI:"
-  log "  kubectl port-forward -n ${ARGOCD_NAMESPACE} svc/argocd-server 8080:443"
-  log "  Then open https://localhost:8080 in your browser"
+  log "ArgoCD UI (via Traefik ingress):"
+  log "  http://argocd.127.0.0.1.nip.io"
   log "  Username: admin"
   log "  Password: ${ARGOCD_PASSWORD}"
+  log ""
+  log "Fallback (port-forward):"
+  log "  kubectl port-forward -n ${ARGOCD_NAMESPACE} svc/argocd-server 8080:80"
+  log "  Then open http://localhost:8080 in your browser"
   log ""
   log "To reach the demo app:"
   log "  kubectl port-forward -n demo svc/demo-app 8888:80"
@@ -162,11 +166,14 @@ wait_for_monitoring() {
 
 get_grafana_info() {
   log ""
-  log "Grafana is accessible via port-forward:"
-  log "  kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${GRAFANA_DEPLOYMENT} 3000:80"
-  log "  Then open http://localhost:3000 in your browser"
+  log "Grafana UI (via Traefik ingress):"
+  log "  http://grafana.127.0.0.1.nip.io"
   log "  Username: admin"
   log "  Password: admin"
+  log ""
+  log "Fallback (port-forward):"
+  log "  kubectl port-forward -n ${MONITORING_NAMESPACE} svc/${GRAFANA_DEPLOYMENT} 3000:80"
+  log "  Then open http://localhost:3000 in your browser"
 }
 
 cleanup() {

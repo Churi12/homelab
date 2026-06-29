@@ -65,6 +65,61 @@ jobs:
             -n monitoring
           kubectl get pods -n monitoring
 
+      - name: Verify ingress objects are created
+        run: |
+          echo "Checking ArgoCD ingress..."
+          kubectl get ingress -n argocd
+          kubectl get ingress argocd-server -n argocd \
+            -o jsonpath='{.spec.rules[0].host}'
+          echo ""
+          echo "Checking Grafana ingress..."
+          kubectl get ingress -n monitoring
+          kubectl get ingress -n monitoring \
+            -o jsonpath='{.items[0].spec.rules[0].host}'
+          echo ""
+
+      - name: Verify Traefik routes answer via nip.io hostnames
+        run: |
+          # Use --resolve to pin the nip.io hostname to 127.0.0.1 without
+          # depending on external DNS during CI.
+          echo "Waiting for ArgoCD to be reachable via Traefik..."
+          for i in $(seq 1 24); do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+              --max-time 5 \
+              --resolve "argocd.127.0.0.1.nip.io:80:127.0.0.1" \
+              http://argocd.127.0.0.1.nip.io/ 2>/dev/null || echo "000")
+            if [[ "${STATUS}" =~ ^[23] ]]; then
+              echo "ArgoCD ingress OK (HTTP ${STATUS})"
+              break
+            fi
+            if [[ ${i} -eq 24 ]]; then
+              echo "ArgoCD ingress not reachable after 24 attempts (last status: ${STATUS})"
+              kubectl describe ingress argocd-server -n argocd || true
+              exit 1
+            fi
+            echo "  Attempt ${i}/24: HTTP ${STATUS}, retrying in 5s..."
+            sleep 5
+          done
+
+          echo "Waiting for Grafana to be reachable via Traefik..."
+          for i in $(seq 1 24); do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+              --max-time 5 \
+              --resolve "grafana.127.0.0.1.nip.io:80:127.0.0.1" \
+              http://grafana.127.0.0.1.nip.io/ 2>/dev/null || echo "000")
+            if [[ "${STATUS}" =~ ^[23] ]]; then
+              echo "Grafana ingress OK (HTTP ${STATUS})"
+              break
+            fi
+            if [[ ${i} -eq 24 ]]; then
+              echo "Grafana ingress not reachable after 24 attempts (last status: ${STATUS})"
+              kubectl describe ingress -n monitoring || true
+              exit 1
+            fi
+            echo "  Attempt ${i}/24: HTTP ${STATUS}, retrying in 5s..."
+            sleep 5
+          done
+
       - name: Apply root app-of-apps and sync to current branch
         run: |
           TARGET_REVISION="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME:-main}}"

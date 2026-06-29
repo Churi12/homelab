@@ -72,30 +72,38 @@ root app-of-apps Application so ArgoCD discovers and syncs everything in apps/.
 
 ### Access ArgoCD
 
-After the bootstrap completes, run this command in another terminal to access
-the ArgoCD UI:
+After the bootstrap completes, open the ArgoCD UI directly in your browser:
 
-  kubectl port-forward -n argocd svc/argocd-server 8080:443
+  http://argocd.127.0.0.1.nip.io
 
-Then open https://localhost:8080 in your browser.
+The nip.io hostname resolves to 127.0.0.1 automatically - no /etc/hosts edits needed.
+k3d maps host port 80 to the Traefik ingress controller that k3s ships by default.
 
 Username: admin
 Password: printed by the bootstrap script
 
+Fallback (port-forward):
+
+  kubectl port-forward -n argocd svc/argocd-server 8080:80
+  Then open http://localhost:8080 in your browser
+
 ### Access Grafana
 
 The bootstrap script also deploys Prometheus and Grafana through ArgoCD. Once
-the bootstrap completes, run this command in another terminal to access Grafana:
+the bootstrap completes, open Grafana directly in your browser:
 
-  kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
-
-Then open http://localhost:3000 in your browser.
+  http://grafana.127.0.0.1.nip.io
 
 Username: admin
 Password: admin
 
 The default dashboards include cluster resource usage panels (CPU, memory, and
 pod status). Navigate to Dashboards to browse them.
+
+Fallback (port-forward):
+
+  kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+  Then open http://localhost:3000 in your browser
 
 ### Access the demo app
 
