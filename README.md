@@ -97,6 +97,26 @@ Password: admin
 The default dashboards include cluster resource usage panels (CPU, memory, and
 pod status). Navigate to Dashboards to browse them.
 
+### Query logs in Grafana Explore
+
+Loki runs in the logging namespace and collects pod logs from every node via
+Grafana Alloy. The Loki datasource is automatically wired into Grafana.
+
+To explore logs:
+
+1. Open Grafana (see above).
+2. Click the Explore icon (compass) in the left sidebar.
+3. Select the Loki datasource from the dropdown at the top.
+4. Use a label filter to find logs, for example:
+
+     {namespace="demo"}
+
+5. Press Shift+Enter or click Run query to see the log lines.
+
+You can filter by any label that Alloy attaches: namespace, pod, container,
+node, or app. Logs and metrics live side by side so you can switch datasources
+in the same Explore view.
+
 ### Access the demo app
 
 After the bootstrap completes, run this command to reach the nginx demo app:
