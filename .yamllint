@@ -1,0 +1,23 @@
+---
+# yamllint configuration for the homelab repo.
+# Extends the opinionated default preset and relaxes a few rules that would
+# otherwise require reformatting files in ways that obscure git history.
+extends: default
+
+rules:
+  # GitHub Actions workflows use "on:" as a required top-level mapping key.
+  # Disabling key checking prevents false positives on every workflow file.
+  truthy:
+    check-keys: false
+
+  # All Kubernetes and ArgoCD manifests in this repo start with ---.
+  # Require the marker so new files stay consistent with existing ones.
+  document-start:
+    present: true
+
+  # Relax the hard line-length limit. Long inline shell fragments and
+  # GraphQL mutations in workflow files are left untouched to preserve
+  # git history. Lines over 120 characters are flagged as warnings only.
+  line-length:
+    max: 120
+    level: warning
