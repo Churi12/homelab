@@ -15,7 +15,24 @@ permissions:
   contents: read
 
 jobs:
+  validate:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run shellcheck
+        run: shellcheck bootstrap/bootstrap.sh
+
   bootstrap:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

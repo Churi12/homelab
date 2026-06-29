@@ -1,3 +1,4 @@
+---
 # Assigns the Copilot coding agent to an issue when it gets the "agent" label.
 #
 # Why label-gated and not every issue: not every issue should become code.

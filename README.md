@@ -115,3 +115,29 @@ To manually delete the cluster, run:
 The cluster persists after the bootstrap script completes, so you can continue
 to use it. In the GitHub Actions workflow, the cluster is automatically deleted
 to keep the environment clean.
+
+## Code quality
+
+The repo uses yamllint and shellcheck to keep YAML consistent and catch shell
+script issues before they are committed.
+
+### Install pre-commit
+
+  pip install pre-commit
+  pre-commit install
+
+After running `pre-commit install`, the hooks run automatically on every
+`git commit`. To run them manually against all files at any time:
+
+  pre-commit run --all-files
+
+The hooks that run on each commit are:
+
+- trailing-whitespace: removes trailing spaces from text files
+- end-of-file-fixer: ensures every file ends with a newline
+- check-added-large-files: blocks files larger than 500 kB
+- yamllint: lints all YAML files using .yamllint
+- shellcheck: static analysis of bootstrap/bootstrap.sh
+
+The same yamllint and shellcheck checks run in the CI lint job on every push,
+so a clean local pre-commit run means CI will also be green for those checks.
