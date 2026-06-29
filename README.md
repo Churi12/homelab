@@ -97,6 +97,8 @@ Password: admin
 The default dashboards include cluster resource usage panels (CPU, memory, and
 pod status). Navigate to Dashboards to browse them.
 
+Traces appear in Grafana under Explore, using the Tempo datasource.
+
 ### Access the demo app
 
 After the bootstrap completes, run this command to reach the nginx demo app:

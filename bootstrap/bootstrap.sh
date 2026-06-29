@@ -12,6 +12,7 @@ ARGOCD_HELM_REPO="https://argoproj.github.io/argo-helm"
 
 MONITORING_NAMESPACE="monitoring"
 GRAFANA_DEPLOYMENT="monitoring-grafana"
+TEMPO_POD_LABEL="app.kubernetes.io/name=tempo"
 
 log() {
   echo "[bootstrap] $*"
@@ -169,6 +170,41 @@ get_grafana_info() {
   log "  Password: admin"
 }
 
+deploy_tempo() {
+  log "Deploying Tempo via ArgoCD..."
+  kubectl apply -f "${REPO_ROOT}/apps/tempo/application.yaml"
+  log "Tempo Application manifest applied"
+}
+
+wait_for_tempo() {
+  log "Waiting for ArgoCD to sync Tempo..."
+
+  local timeout=300
+  local elapsed=0
+  local interval=10
+
+  log "Waiting for Tempo pod to be created by ArgoCD..."
+  until kubectl get pods -l "${TEMPO_POD_LABEL}" \
+        -n "${MONITORING_NAMESPACE}" --no-headers 2>/dev/null | grep -q .; do
+    if [[ ${elapsed} -ge ${timeout} ]]; then
+      log_error "Timed out waiting for Tempo pod to appear"
+      kubectl get application tempo -n "${ARGOCD_NAMESPACE}" -o yaml 2>/dev/null || true
+      return 1
+    fi
+    log "  pod not yet created (${elapsed}s elapsed), retrying..."
+    sleep ${interval}
+    elapsed=$((elapsed + interval))
+  done
+
+  log "Tempo pod found. Waiting for it to become ready..."
+  kubectl wait --for=condition=ready pod \
+    -l "${TEMPO_POD_LABEL}" \
+    -n "${MONITORING_NAMESPACE}" \
+    --timeout=300s
+
+  log "Tempo is ready"
+}
+
 cleanup() {
   log "Deleting cluster ${CLUSTER_NAME}..."
   k3d cluster delete "${CLUSTER_NAME}" || true
@@ -187,6 +223,8 @@ main() {
   deploy_monitoring
   wait_for_monitoring
   get_grafana_info
+  deploy_tempo
+  wait_for_tempo
   
   log "Bootstrap complete!"
 }

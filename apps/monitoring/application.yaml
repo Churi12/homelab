@@ -50,6 +50,15 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
+          # Wire Tempo as a datasource so traces are queryable in Explore.
+          additionalDataSources:
+            - name: Tempo
+              type: tempo
+              access: proxy
+              url: http://tempo.monitoring.svc.cluster.local:3100
+              isDefault: false
+              jsonData:
+                httpMethod: GET
 
         kube-state-metrics:
           resources:
