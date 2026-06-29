@@ -8,6 +8,12 @@
 # which model the agent uses. The model comes from your Copilot coding agent
 # settings (set a free model there as the default if you want every run to be
 # free). Verify on the billing page that runs show zero premium requests.
+#
+# Note on the token: this uses a personal access token from the secret
+# COPILOT_ASSIGN_TOKEN, not the default GITHUB_TOKEN. The default token cannot
+# see the Copilot agent in the list of assignable actors, so assignment silently
+# skips. Create a PAT with repo scope and add it as a repo secret named
+# COPILOT_ASSIGN_TOKEN (Settings > Secrets and variables > Actions).
 name: auto-assign-copilot
 
 on:
@@ -19,16 +25,29 @@ permissions:
 
 jobs:
   assign:
-    # Only run when the label that was just added is "agent".
-    if: github.event.label.name == 'agent'
+    # Only run when the label that was just added is "agent", and only for
+    # issues opened by the repo owner. This is a public repo, so without the
+    # owner check anyone who could label an issue could spawn an agent session.
+    if: >-
+      github.event.label.name == 'agent' &&
+      github.event.issue.user.login == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - name: Assign Copilot to the issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
           ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
         run: |
           set -euo pipefail
+
+          # The default GITHUB_TOKEN cannot see the Copilot agent as an
+          # assignable actor, so a personal access token is required here. Fail
+          # loudly if the secret is missing, rather than skipping and looking
+          # green.
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "COPILOT_ASSIGN_TOKEN secret is not set. Add a PAT with repo scope as that secret."
+            exit 1
+          fi
 
           # Find the Copilot bot actor id for this repo. It must be in the list
           # of actors that can be assigned, or assignment will silently no-op.
@@ -43,8 +62,8 @@ jobs:
             --jq '.data.repository.suggestedActors.nodes[] | select(.login=="copilot-swe-agent") | .id')
 
           if [ -z "${BOT_ID}" ]; then
-            echo "Copilot is not assignable on this repo. Is the Copilot coding agent enabled? Skipping."
-            exit 0
+            echo "Copilot is not assignable on this repo. Is the Copilot coding agent enabled, and does COPILOT_ASSIGN_TOKEN have repo scope?"
+            exit 1
           fi
 
           PAYLOAD=$(jq -n \
