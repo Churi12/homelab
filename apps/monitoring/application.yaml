@@ -50,6 +50,15 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts:
+              - grafana.127.0.0.1.nip.io
+            path: /
+            pathType: Prefix
+            tls: []
+
           # Loki datasource so logs appear in Grafana Explore alongside metrics.
           additionalDataSources:
             - name: Loki
