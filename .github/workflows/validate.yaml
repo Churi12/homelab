@@ -3,10 +3,13 @@
 # Runs in parallel with the bootstrap job and catches typos and schema
 # violations in seconds, before any cluster is created.
 #
-# Tools and pinned versions:
-#   kubeconform  v0.6.7   validates manifests against Kubernetes JSON schemas
-#   helm         v3.13.0  renders every pinned chart with its inline values
-#   kube-linter  v0.6.8   checks plain manifests for common best-practice issues
+# Tools used, all pinned below so a run is reproducible:
+#   kubeconform  validates manifests against Kubernetes JSON schemas
+#   helm         renders every pinned chart with its inline values
+#   kube-linter  checks plain manifests for common best-practice issues
+#
+# Every pin lives in the env block or in a with: version key, which is where
+# Renovate can see and bump it. Do not repeat a version in a step name.
 name: Validate Manifests
 
 on:
@@ -35,7 +38,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Helm v3.13.0
+      - name: Install Helm
         uses: azure/setup-helm@v3
         with:
           version: v3.13.0
@@ -46,7 +49,7 @@ jobs:
       # kubeconform validates every manifest against the official Kubernetes
       # JSON schemas plus the ArgoCD CRD schemas from the datreeio catalog.
       # Resources whose schema is not found (e.g. k3d Simple) are skipped.
-      - name: Install kubeconform v0.6.7
+      - name: Install kubeconform
         run: |
           curl -fsSL \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
@@ -91,7 +94,7 @@ jobs:
       # kube-linter checks the plain Kubernetes workload manifests for common
       # security and correctness issues. The .kube-linter.yaml config in the
       # repo root scopes the checks to what is appropriate for a homelab.
-      - name: Install kube-linter v0.6.8
+      - name: Install kube-linter
         run: |
           curl -fsSL \
             "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \

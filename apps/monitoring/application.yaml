@@ -50,12 +50,30 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
-          # Wire Tempo as a datasource so traces are queryable in Explore.
+          ingress:
+            enabled: true
+            ingressClassName: traefik
+            hosts:
+              - grafana.127.0.0.1.nip.io
+            path: /
+            pathType: Prefix
+            tls: []
+
+          # Loki and Tempo share one list. The chart renders a single
+          # datasource file from this key, so two separate keys would mean the
+          # later one silently replaces the earlier.
           additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.logging.svc.cluster.local:3100
+              access: proxy
+              isDefault: false
+              jsonData:
+                maxLines: 1000
             - name: Tempo
               type: tempo
-              access: proxy
               url: http://tempo.monitoring.svc.cluster.local:3100
+              access: proxy
               isDefault: false
               jsonData:
                 httpMethod: GET

@@ -72,24 +72,27 @@ root app-of-apps Application so ArgoCD discovers and syncs everything in apps/.
 
 ### Access ArgoCD
 
-After the bootstrap completes, run this command in another terminal to access
-the ArgoCD UI:
+After the bootstrap completes, open the ArgoCD UI directly in your browser:
 
-  kubectl port-forward -n argocd svc/argocd-server 8080:443
+  http://argocd.127.0.0.1.nip.io
 
-Then open https://localhost:8080 in your browser.
+The nip.io hostname resolves to 127.0.0.1 automatically - no /etc/hosts edits needed.
+k3d maps host port 80 to the Traefik ingress controller that k3s ships by default.
 
 Username: admin
 Password: printed by the bootstrap script
 
+Fallback (port-forward):
+
+  kubectl port-forward -n argocd svc/argocd-server 8080:80
+  Then open http://localhost:8080 in your browser
+
 ### Access Grafana
 
 The bootstrap script also deploys Prometheus and Grafana through ArgoCD. Once
-the bootstrap completes, run this command in another terminal to access Grafana:
+the bootstrap completes, open Grafana directly in your browser:
 
-  kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
-
-Then open http://localhost:3000 in your browser.
+  http://grafana.127.0.0.1.nip.io
 
 Username: admin
 Password: admin
@@ -97,7 +100,35 @@ Password: admin
 The default dashboards include cluster resource usage panels (CPU, memory, and
 pod status). Navigate to Dashboards to browse them.
 
-Traces appear in Grafana under Explore, using the Tempo datasource.
+Fallback (port-forward):
+
+  kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+  Then open http://localhost:3000 in your browser
+
+### Query logs in Grafana Explore
+
+Loki runs in the logging namespace and collects pod logs from every node via
+Grafana Alloy. The Loki datasource is automatically wired into Grafana.
+
+To explore logs:
+
+1. Open Grafana (see above).
+2. Click the Explore icon (compass) in the left sidebar.
+3. Select the Loki datasource from the dropdown at the top.
+4. Use a label filter to find logs, for example:
+
+     {namespace="demo"}
+
+5. Press Shift+Enter or click Run query to see the log lines.
+
+You can filter by any label that Alloy attaches: namespace, pod, container,
+node, or app. Logs and metrics live side by side so you can switch datasources
+in the same Explore view.
+
+### Query traces in Grafana Explore
+
+Tempo runs in the monitoring namespace and is wired in as a datasource the same
+way. Pick Tempo in Explore and search by service name, or paste a trace id.
 
 ### Access the demo app
 
@@ -189,3 +220,34 @@ The hooks that run on each commit are:
 
 The same yamllint and shellcheck checks run in the CI lint job on every push,
 so a clean local pre-commit run means CI will also be green for those checks.
+
+## Keeping the pins fresh
+
+Everything this lab installs is pinned: the k3s image that sets the cluster
+Kubernetes version, the ArgoCD chart, every Helm chart in apps/, the CLI tools
+CI installs, the GitHub Actions, and the pre-commit hook revisions. Pinning is
+what makes a run reproducible, and it is also what makes the repo go quietly
+stale.
+
+Renovate closes that gap. Its config lives in .github/renovate.json and it opens
+one small PR per group of updates rather than a single unreviewable bump:
+
+- helm charts: every chart under apps/ plus the ArgoCD chart, minor and patch
+- kubernetes version: the k3s image and the kubectl CI pin, which move together
+- ci tooling: k3d, helm, kubeconform, kube-linter, PyYAML, pre-commit hooks
+- github actions: the actions used by the workflows
+- major bumps are never grouped, so a breaking one is easy to close or revert
+
+Renovate only proposes. CI is the gate that decides: every bump PR runs the
+manifest validation job and the full bootstrap job, so a chart version that no
+longer renders, or a k3s image the lab cannot boot on, fails before merge rather
+than after.
+
+Because Renovate can only bump a version where it can see it, versions live in
+one place per tool: the env block, or a with: version key, or the pin in the
+manifest. Do not repeat a version in a step name or a comment, or that copy will
+drift.
+
+Enabling Renovate is an owner action: install the free hosted Renovate GitHub App
+on the repo. Until then this config does nothing. The first thing the app opens
+is a Dependency Dashboard issue listing everything it found.
