@@ -195,3 +195,34 @@ The hooks that run on each commit are:
 
 The same yamllint and shellcheck checks run in the CI lint job on every push,
 so a clean local pre-commit run means CI will also be green for those checks.
+
+## Keeping the pins fresh
+
+Everything this lab installs is pinned: the k3s image that sets the cluster
+Kubernetes version, the ArgoCD chart, every Helm chart in apps/, the CLI tools
+CI installs, the GitHub Actions, and the pre-commit hook revisions. Pinning is
+what makes a run reproducible, and it is also what makes the repo go quietly
+stale.
+
+Renovate closes that gap. Its config lives in .github/renovate.json and it opens
+one small PR per group of updates rather than a single unreviewable bump:
+
+- helm charts: every chart under apps/ plus the ArgoCD chart, minor and patch
+- kubernetes version: the k3s image and the kubectl CI pin, which move together
+- ci tooling: k3d, helm, kubeconform, kube-linter, PyYAML, pre-commit hooks
+- github actions: the actions used by the workflows
+- major bumps are never grouped, so a breaking one is easy to close or revert
+
+Renovate only proposes. CI is the gate that decides: every bump PR runs the
+manifest validation job and the full bootstrap job, so a chart version that no
+longer renders, or a k3s image the lab cannot boot on, fails before merge rather
+than after.
+
+Because Renovate can only bump a version where it can see it, versions live in
+one place per tool: the env block, or a with: version key, or the pin in the
+manifest. Do not repeat a version in a step name or a comment, or that copy will
+drift.
+
+Enabling Renovate is an owner action: install the free hosted Renovate GitHub App
+on the repo. Until then this config does nothing. The first thing the app opens
+is a Dependency Dashboard issue listing everything it found.
