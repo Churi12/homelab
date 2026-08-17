@@ -2,7 +2,7 @@
 # Tempo Application manifest.
 # Deploys Grafana Tempo in single-binary mode via Helm for distributed tracing.
 # Tempo provides the T (traces) in the LGTM observability stack.
-# Uses local filesystem storage (no S3, no cloud) — fine for an ephemeral lab.
+# Uses local filesystem storage (no S3, no cloud), fine for an ephemeral lab.
 # Chart: grafana/tempo (single-binary, not tempo-distributed).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -22,9 +22,19 @@ spec:
         # Disable anonymous usage reporting.
         tempo:
           reportingEnabled: false
+          # Keep resource usage low for the 2-node k3d lab. This chart has no
+          # top-level resources key, so the block has to live under tempo or it
+          # renders to nothing.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
           storage:
             trace:
-              # Local filesystem backend — no object store, no secrets.
+              # Local filesystem backend, no object store and no secrets.
               backend: local
               local:
                 path: /var/tempo/traces
@@ -39,18 +49,9 @@ spec:
                 http:
                   endpoint: 0.0.0.0:4318
 
-        # No PVC — ephemeral lab, traces live only for the life of the pod.
+        # No PVC. Ephemeral lab, traces live only for the life of the pod.
         persistence:
           enabled: false
-
-        # Keep resource usage low for the 2-node k3d lab.
-        resources:
-          requests:
-            cpu: 50m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

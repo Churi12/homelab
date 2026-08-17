@@ -126,6 +126,96 @@ jobs:
           echo "Tempo pod is running"
           kubectl get pods -n monitoring
 
+      # A Ready Tempo pod does not prove the OTLP receivers are listening or
+      # that a trace can be read back. Push one span over OTLP HTTP and query
+      # it again by trace ID, which exercises the whole write and read path.
+      - name: Verify Tempo ingests and returns a trace
+        run: |
+          kubectl port-forward -n monitoring svc/tempo 3100:3100 4318:4318 &
+          PF_PID=$!
+          trap 'kill ${PF_PID} 2>/dev/null || true' EXIT
+
+          echo "Waiting for the port-forward to accept connections..."
+          for i in $(seq 1 15); do
+            if curl -sf --max-time 3 http://localhost:3100/ready >/dev/null; then
+              echo "Tempo is ready to serve queries"
+              break
+            fi
+            if [[ ${i} -eq 15 ]]; then
+              echo "Tempo did not become queryable"
+              exit 1
+            fi
+            sleep 4
+          done
+
+          TRACE_ID=$(openssl rand -hex 16)
+          SPAN_ID=$(openssl rand -hex 8)
+          NOW_NS=$(($(date -u +%s) * 1000000000))
+          END_NS=$((NOW_NS + 1000000))
+          echo "Pushing trace ${TRACE_ID} over OTLP HTTP..."
+
+          # OTLP HTTP accepts the protobuf schema encoded as JSON, so a single
+          # span can be pushed with curl and no instrumented application.
+          jq -n \
+            --arg trace_id "${TRACE_ID}" \
+            --arg span_id "${SPAN_ID}" \
+            --arg start "${NOW_NS}" \
+            --arg end "${END_NS}" \
+            '{resourceSpans: [{
+               resource: {attributes: [{
+                 key: "service.name",
+                 value: {stringValue: "bootstrap-ci"}
+               }]},
+               scopeSpans: [{
+                 scope: {name: "bootstrap-workflow"},
+                 spans: [{
+                   traceId: $trace_id,
+                   spanId: $span_id,
+                   name: "ci-smoke-span",
+                   kind: 1,
+                   startTimeUnixNano: $start,
+                   endTimeUnixNano: $end
+                 }]
+               }]
+             }]}' > /tmp/trace.json
+
+          PUSH_STATUS=$(curl -o /tmp/push-body.txt -s -w "%{http_code}" \
+            --max-time 10 \
+            -X POST http://localhost:4318/v1/traces \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/trace.json)
+
+          if [[ ! "${PUSH_STATUS}" =~ ^2 ]]; then
+            echo "OTLP push failed with HTTP ${PUSH_STATUS}"
+            head -c 500 /tmp/push-body.txt
+            exit 1
+          fi
+          echo "OTLP push accepted (HTTP ${PUSH_STATUS})"
+
+          echo "Reading the trace back from Tempo..."
+          for i in $(seq 1 24); do
+            # Accept either spelling of the span container: OTLP renamed
+            # instrumentationLibrarySpans to scopeSpans, and which one Tempo
+            # emits depends on its version.
+            if curl -sf --max-time 10 \
+                -H "Accept: application/json" \
+                "http://localhost:3100/api/traces/${TRACE_ID}" \
+                | jq -e '.batches[]?
+                         | (.scopeSpans // .instrumentationLibrarySpans // [])[]?
+                         | .spans[]?
+                         | select(.name == "ci-smoke-span")' >/dev/null 2>&1; then
+              echo "Tempo returned the span for trace ${TRACE_ID}"
+              break
+            fi
+            if [[ ${i} -eq 24 ]]; then
+              echo "Trace ${TRACE_ID} never became queryable"
+              kubectl logs -n monitoring -l app.kubernetes.io/name=tempo --tail=60 || true
+              exit 1
+            fi
+            echo "  Attempt ${i}/24: trace not queryable yet, retrying in 5s..."
+            sleep 5
+          done
+
       - name: Show ArgoCD Application statuses
         run: |
           kubectl get application -n argocd
