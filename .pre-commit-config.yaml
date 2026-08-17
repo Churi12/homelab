@@ -1,0 +1,35 @@
+---
+# pre-commit hook configuration for the homelab repo.
+#
+# Install pre-commit and set up hooks locally:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run all hooks against every file without committing:
+#   pre-commit run --all-files
+#
+# Hook versions are pinned so local and CI runs stay reproducible.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Remove trailing whitespace from all text files.
+      - id: trailing-whitespace
+      # Ensure every text file ends with a single newline.
+      - id: end-of-file-fixer
+      # Block accidental commits of files larger than 500 kB.
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      # Lint all YAML files using the project .yamllint config.
+      - id: yamllint
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      # Static analysis for the bootstrap shell script.
+      - id: shellcheck
+        files: bootstrap/bootstrap\.sh
