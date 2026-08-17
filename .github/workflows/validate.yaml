@@ -5,7 +5,7 @@
 #
 # Tools and pinned versions:
 #   kubeconform  v0.6.7   validates manifests against Kubernetes JSON schemas
-#   helm         v3.13.0  lints the monitoring chart values
+#   helm         v3.13.0  renders every pinned chart with its inline values
 #   kube-linter  v0.6.8   checks plain manifests for common best-practice issues
 name: Validate Manifests
 
@@ -35,6 +35,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Helm v3.13.0
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.13.0
+
+      - name: Install PyYAML for the render script
+        run: pip install pyyaml==6.0.2
+
       # kubeconform validates every manifest against the official Kubernetes
       # JSON schemas plus the ArgoCD CRD schemas from the datreeio catalog.
       # Resources whose schema is not found (e.g. k3d Simple) are skipped.
@@ -58,23 +66,27 @@ jobs:
                 -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
                 -summary
 
-      # Helm lint validates that the monitoring values file is compatible with
-      # the chart structure. The chart is pulled at the pinned version used by
-      # the ArgoCD Application so the check is identical to what ArgoCD sees.
-      - name: Install Helm v3.13.0
-        uses: azure/setup-helm@v3
-        with:
-          version: v3.13.0
-
-      - name: Lint monitoring Helm values
+      # Every Application carries its Helm values inline, so validating the
+      # Application manifest alone proves nothing about those values. Render
+      # each pinned chart with them, which is what ArgoCD does before it
+      # applies anything, and fail if a chart cannot render.
+      - name: Render every Helm Application
         run: |
-          helm repo add prometheus-community \
-            https://prometheus-community.github.io/helm-charts
-          helm repo update prometheus-community
-          helm pull prometheus-community/kube-prometheus-stack \
-            --version 55.5.0 --untar --untardir /tmp/charts
-          helm lint /tmp/charts/kube-prometheus-stack \
-            --values apps/monitoring/values.yaml
+          hack/render_apps.py \
+            --out-dir /tmp/rendered \
+            --manifest-json /tmp/stack.json
+
+      # Validating the rendered output is the check that actually covers the
+      # workloads that end up in the cluster, CRDs and all.
+      - name: Validate rendered output with kubeconform
+        run: |
+          kubeconform \
+            -strict \
+            -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            -summary \
+            /tmp/rendered/*.yaml
 
       # kube-linter checks the plain Kubernetes workload manifests for common
       # security and correctness issues. The .kube-linter.yaml config in the

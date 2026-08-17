@@ -123,7 +123,7 @@ Install the tools once (pinned to the same versions used in CI):
     "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
     | tar xz -C /tmp kube-linter && sudo mv /tmp/kube-linter /usr/local/bin/
 
-Then run the three validation steps from the repo root:
+Then run the four validation steps from the repo root:
 
   # 1. Validate all Kubernetes manifests (including ArgoCD Application CRDs)
   find apps/ clusters/ \( -name '*.yaml' -o -name '*.yml' \) \
@@ -133,17 +133,24 @@ Then run the three validation steps from the repo root:
         -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
         -summary
 
-  # 2. Lint the monitoring chart values against the pinned chart version
-  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-  helm repo update prometheus-community
-  helm pull prometheus-community/kube-prometheus-stack \
-    --version 55.5.0 --untar --untardir /tmp/charts
-  helm lint /tmp/charts/kube-prometheus-stack --values apps/monitoring/values.yaml
+  # 2. Render every Helm Application with the values ArgoCD will apply
+  pip install pyyaml
+  hack/render_apps.py --out-dir /tmp/rendered
 
-  # 3. Check plain Kubernetes manifests for best-practice issues
+  # 3. Validate the rendered workloads, which is what lands in the cluster
+  kubeconform -strict -ignore-missing-schemas \
+    -schema-location default \
+    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+    -summary /tmp/rendered/*.yaml
+
+  # 4. Check plain Kubernetes manifests for best-practice issues
   kube-linter lint apps/demo-app/
 
-All three steps must exit 0 before opening a pull request.
+All four steps must exit 0 before opening a pull request.
+
+Step 2 is the one that catches values that the chart silently ignores: a key at
+the wrong nesting level renders to nothing rather than failing, so reading the
+rendered output is the only way to see what the cluster actually gets.
 
 ### Clean up
 

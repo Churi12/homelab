@@ -1,3 +1,4 @@
+---
 # kube-linter configuration for the homelab.
 # Uses all built-in checks and disables the ones that are intentionally
 # relaxed for a single-replica demo environment. Each exclusion explains why.
