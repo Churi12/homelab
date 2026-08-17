@@ -1,0 +1,187 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "timezone": "Europe/Lisbon",
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "labels": [
+    "dependencies"
+  ],
+  "argocd": {
+    "description": "Every chart the lab deploys is pinned inline in an ArgoCD Application under apps/",
+    "managerFilePatterns": [
+      "/^apps/.+\\.ya?ml$/"
+    ]
+  },
+  "pre-commit": {
+    "description": "The pre-commit hook revs are pins too, so they go stale the same way",
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "description": "k3s image tag that defines the Kubernetes version of the lab cluster",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^clusters/k3d-config\\.yaml$/"
+      ],
+      "matchStrings": [
+        "image:\\s+docker\\.io/rancher/k3s:(?<currentValue>v[^\\s\"]+)"
+      ],
+      "depNameTemplate": "rancher/k3s",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-k3s(?<build>\\d+)$"
+    },
+    {
+      "description": "ArgoCD chart version, installed by bootstrap.sh rather than by an Application",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^bootstrap/bootstrap\\.sh$/"
+      ],
+      "matchStrings": [
+        "ARGOCD_HELM_CHART_VERSION=\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "argo-cd",
+      "datasourceTemplate": "helm",
+      "registryUrlTemplate": "https://argoproj.github.io/argo-helm"
+    },
+    {
+      "description": "k3d, pulled by its install script in CI",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "k3d-io/k3d/(?<currentValue>v[0-9.]+)/install\\.sh"
+      ],
+      "depNameTemplate": "k3d-io/k3d",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "kubectl version handed to azure/setup-kubectl. The built-in github-actions manager already covers azure/setup-helm this way, but not setup-kubectl, so only this one needs a custom manager",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "uses: azure/setup-kubectl@v\\d+\\s+with:\\s+version: (?<currentValue>v[^\\s]+)"
+      ],
+      "depNameTemplate": "kubernetes/kubernetes",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "kubeconform and kube-linter, pinned as workflow env vars",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/validate\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "KUBECONFORM_VERSION: (?<currentValue>v[^\\s]+)"
+      ],
+      "depNameTemplate": "yannh/kubeconform",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/validate\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "KUBELINTER_VERSION: (?<currentValue>v[^\\s]+)"
+      ],
+      "depNameTemplate": "stackrox/kube-linter",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "description": "PyYAML, installed by pip for the render script",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "pip install pyyaml==(?<currentValue>[0-9.]+)"
+      ],
+      "depNameTemplate": "pyyaml",
+      "datasourceTemplate": "pypi"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "The git sources point at this repo itself, so there is nothing to bump",
+      "matchDatasources": [
+        "git-refs",
+        "git-tags"
+      ],
+      "matchPackageNames": [
+        "https://github.com/Churi12/homelab.git"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "One PR for all chart minor and patch bumps",
+      "matchDatasources": [
+        "helm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "helm charts"
+    },
+    {
+      "description": "One PR for the workflow actions themselves",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "github actions"
+    },
+    {
+      "description": "One PR for the CLI tools CI installs, and for the pre-commit hooks. helm comes from the built-in github-actions manager, which names it helm rather than helm/helm",
+      "matchDepNames": [
+        "k3d-io/k3d",
+        "helm",
+        "yannh/kubeconform",
+        "stackrox/kube-linter",
+        "pyyaml"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "ci tooling"
+    },
+    {
+      "description": "The k3s image and kubectl move together: kubectl should track the cluster minor",
+      "matchDepNames": [
+        "rancher/k3s",
+        "kubernetes/kubernetes"
+      ],
+      "groupName": "kubernetes version",
+      "labels": [
+        "dependencies",
+        "kubernetes"
+      ]
+    },
+    {
+      "description": "Major bumps stay on their own so a breaking one is easy to close or revert",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": null,
+      "labels": [
+        "dependencies",
+        "major"
+      ]
+    }
+  ]
+}
