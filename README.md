@@ -106,6 +106,52 @@ After the bootstrap completes, run this command to reach the nginx demo app:
 Then open http://localhost:8888 in your browser. You should see the nginx
 welcome page.
 
+### Validate manifests locally
+
+The CI runs a fast validation job before the cluster boots. You can run the
+same checks on your machine without Docker or a cluster.
+
+Install the tools once (pinned to the same versions used in CI):
+
+  KUBECONFORM_VERSION=v0.6.7
+  curl -fsSL \
+    "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+    | tar xz -C /usr/local/bin kubeconform
+
+  KUBELINTER_VERSION=v0.6.8
+  curl -fsSL \
+    "https://github.com/stackrox/kube-linter/releases/download/${KUBELINTER_VERSION}/kube-linter-linux.tar.gz" \
+    | tar xz -C /tmp kube-linter && sudo mv /tmp/kube-linter /usr/local/bin/
+
+Then run the four validation steps from the repo root:
+
+  # 1. Validate all Kubernetes manifests (including ArgoCD Application CRDs)
+  find apps/ clusters/ \( -name '*.yaml' -o -name '*.yml' \) \
+    | xargs grep -l '^apiVersion:' \
+    | xargs kubeconform -strict -ignore-missing-schemas \
+        -schema-location default \
+        -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+        -summary
+
+  # 2. Render every Helm Application with the values ArgoCD will apply
+  pip install pyyaml
+  hack/render_apps.py --out-dir /tmp/rendered
+
+  # 3. Validate the rendered workloads, which is what lands in the cluster
+  kubeconform -strict -ignore-missing-schemas \
+    -schema-location default \
+    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+    -summary /tmp/rendered/*.yaml
+
+  # 4. Check plain Kubernetes manifests for best-practice issues
+  kube-linter lint apps/demo-app/
+
+All four steps must exit 0 before opening a pull request.
+
+Step 2 is the one that catches values that the chart silently ignores: a key at
+the wrong nesting level renders to nothing rather than failing, so reading the
+rendered output is the only way to see what the cluster actually gets.
+
 ### Clean up
 
 To manually delete the cluster, run:
@@ -115,3 +161,29 @@ To manually delete the cluster, run:
 The cluster persists after the bootstrap script completes, so you can continue
 to use it. In the GitHub Actions workflow, the cluster is automatically deleted
 to keep the environment clean.
+
+## Code quality
+
+The repo uses yamllint and shellcheck to keep YAML consistent and catch shell
+script issues before they are committed.
+
+### Install pre-commit
+
+  pip install pre-commit
+  pre-commit install
+
+After running `pre-commit install`, the hooks run automatically on every
+`git commit`. To run them manually against all files at any time:
+
+  pre-commit run --all-files
+
+The hooks that run on each commit are:
+
+- trailing-whitespace: removes trailing spaces from text files
+- end-of-file-fixer: ensures every file ends with a newline
+- check-added-large-files: blocks files larger than 500 kB
+- yamllint: lints all YAML files using .yamllint
+- shellcheck: static analysis of bootstrap/bootstrap.sh
+
+The same yamllint and shellcheck checks run in the CI lint job on every push,
+so a clean local pre-commit run means CI will also be green for those checks.
