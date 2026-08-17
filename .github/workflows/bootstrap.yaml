@@ -158,6 +158,68 @@ jobs:
 
           kubectl get pods -n logging
 
+      # Pods being ready proves nothing about log shipping: a broken Alloy
+      # pipeline stays Ready and tails no files. The only honest check is to
+      # ask Loki whether the demo app logs actually arrived.
+      - name: Verify demo app logs actually reach Loki
+        run: |
+          kubectl port-forward -n logging svc/loki 3100:3100 &
+          PF_PID=$!
+          trap 'kill ${PF_PID} 2>/dev/null || true' EXIT
+
+          echo "Waiting for the port-forward to accept connections..."
+          for i in $(seq 1 15); do
+            if curl -sf --max-time 3 http://localhost:3100/ready >/dev/null; then
+              echo "Loki is ready to serve queries"
+              break
+            fi
+            if [[ ${i} -eq 15 ]]; then
+              echo "Loki did not become queryable"
+              exit 1
+            fi
+            sleep 4
+          done
+
+          # Alloy tails files and batches pushes, so the first lines take a
+          # little while to land. Retry rather than assume.
+          echo "Querying Loki for logs from the demo namespace..."
+          for i in $(seq 1 30); do
+            STREAMS=$(curl -sG --max-time 10 \
+              http://localhost:3100/loki/api/v1/query_range \
+              --data-urlencode 'query={namespace="demo"}' \
+              --data-urlencode 'limit=5' \
+              --data-urlencode "start=$(date -u -d '30 minutes ago' +%s)000000000" \
+              --data-urlencode "end=$(date -u +%s)000000000" \
+              | jq '.data.result | length' 2>/dev/null || echo 0)
+
+            if [[ "${STREAMS}" =~ ^[0-9]+$ ]] && [[ "${STREAMS}" -gt 0 ]]; then
+              echo "Loki returned ${STREAMS} stream(s) for namespace demo"
+              break
+            fi
+
+            if [[ ${i} -eq 30 ]]; then
+              echo "No demo namespace logs in Loki after 30 attempts"
+              echo "--- namespace label values Loki does know about ---"
+              curl -sG --max-time 10 \
+                http://localhost:3100/loki/api/v1/label/namespace/values || true
+              echo ""
+              echo "--- alloy logs ---"
+              kubectl logs -n logging -l app.kubernetes.io/name=alloy --tail=60 || true
+              exit 1
+            fi
+            echo "  Attempt ${i}/30: no streams yet, retrying in 5s..."
+            sleep 5
+          done
+
+          echo "--- a sample of what landed ---"
+          curl -sG --max-time 10 \
+            http://localhost:3100/loki/api/v1/query_range \
+            --data-urlencode 'query={namespace="demo"}' \
+            --data-urlencode 'limit=3' \
+            --data-urlencode "start=$(date -u -d '30 minutes ago' +%s)000000000" \
+            --data-urlencode "end=$(date -u +%s)000000000" \
+            | jq -r '.data.result[0].values[]? | .[1]' | head -3
+
       - name: Show ArgoCD Application statuses
         run: |
           kubectl get application -n argocd

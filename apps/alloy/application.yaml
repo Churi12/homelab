@@ -93,9 +93,17 @@ spec:
                 }
               }
 
+              // Expand the glob built above into concrete file paths.
+              // loki.source.file does no file discovery of its own, so handing
+              // it a path with a wildcard in it tails nothing at all and fails
+              // silently. local.file_match is what resolves the glob.
+              local.file_match "pod_logs" {
+                path_targets = discovery.relabel.pod_logs.output
+              }
+
               // Tail the log files discovered above.
               loki.source.file "pod_logs" {
-                targets    = discovery.relabel.pod_logs.output
+                targets    = local.file_match.pod_logs.targets
                 forward_to = [loki.write.default.receiver]
               }
 

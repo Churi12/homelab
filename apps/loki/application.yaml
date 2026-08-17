@@ -99,8 +99,12 @@ spec:
             enabled: false
             grafanaAgent:
               installOperator: false
-          lokiCanary:
-            enabled: false
+
+        # lokiCanary is a top-level key in this chart, not a child of
+        # monitoring. Nested under monitoring it is ignored and the canary
+        # DaemonSet ships anyway, so it has to sit here to take effect.
+        lokiCanary:
+          enabled: false
 
         # Disable the Helm test pod.
         test:
