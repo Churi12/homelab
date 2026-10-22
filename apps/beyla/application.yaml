@@ -1,0 +1,103 @@
+---
+# Grafana Beyla ArgoCD Application.
+# Beyla uses eBPF to trace HTTP traffic from the kernel, so the demo app gets
+# traces without any change to its code or image. The demo app is a plain nginx
+# with no OpenTelemetry at all, which is exactly the case Beyla is for.
+# Traces go to Tempo over OTLP HTTP, the same receiver an instrumented app uses.
+# Chart: grafana/beyla 1.16.15  App: Beyla 3.39.0
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: beyla
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: beyla
+    targetRevision: 1.16.15
+    helm:
+      values: |
+        # Beyla runs as a DaemonSet and needs privileged access to load eBPF
+        # programs. Fine for a local lab, think twice before doing this on a
+        # shared cluster.
+        privileged: true
+
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+
+        config:
+          data:
+            attributes:
+              kubernetes:
+                enable: true
+            # Only instrument the demo namespace. Without this Beyla would
+            # trace every process on the node, ArgoCD and Grafana included.
+            discovery:
+              instrument:
+                - k8s_namespace: demo
+            # Group /path/123 and /path/456 under one route name.
+            routes:
+              unmatched: heuristic
+            otel_traces_export:
+              endpoint: http://tempo.monitoring.svc.cluster.local:4318
+            prometheus_export:
+              port: 9090
+              path: /metrics
+
+        # A tiny load generator, so the demo app has requests to trace.
+        # It lives in this Application so the whole Beyla demo comes and goes
+        # together.
+        extraObjects:
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: loadgen
+              namespace: demo
+              labels:
+                app: loadgen
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app: loadgen
+              template:
+                metadata:
+                  labels:
+                    app: loadgen
+                spec:
+                  containers:
+                    - name: curl
+                      image: curlimages/curl:8.10.1
+                      command: ["/bin/sh", "-c"]
+                      # Mix a working page and a missing one, so Tempo shows
+                      # both 200 and 404 spans.
+                      args:
+                        - |
+                          while true; do
+                            curl -s -o /dev/null http://demo-app.demo.svc.cluster.local/
+                            curl -s -o /dev/null http://demo-app.demo.svc.cluster.local/missing/42
+                            sleep 2
+                          done
+                      resources:
+                        requests:
+                          cpu: 5m
+                          memory: 16Mi
+                        limits:
+                          cpu: 50m
+                          memory: 32Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: beyla
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

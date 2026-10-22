@@ -1,7 +1,7 @@
 ---
 # Fast manifest validation job.
-# Runs in parallel with the bootstrap job and catches typos and schema
-# violations in seconds, before any cluster is created.
+# Catches typos and schema violations in seconds. This is the only CI job:
+# the lab itself runs locally, not in CI.
 #
 # Tools used, all pinned below so a run is reproducible:
 #   kubeconform  validates manifests against Kubernetes JSON schemas
