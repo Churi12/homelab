@@ -45,13 +45,52 @@ check_requirements() {
   log "All requirements met"
 }
 
+# Optional: trust an extra CA, for machines behind a TLS inspecting proxy
+# (a company laptop, for example). Without it every image pull and every chart
+# download inside the lab fails with "x509: certificate signed by unknown
+# authority", even though docker pull works fine on the host.
+#   EXTRA_CA_FILE=/path/to/proxy-root-ca.pem ./bootstrap/bootstrap.sh
+# The script builds one bundle (system CAs plus the extra one) outside the repo
+# and mounts it into the k3d nodes and into the ArgoCD repo server.
+CA_BUNDLE="${HOME}/.cache/homelab/ca-bundle.pem"
+K3D_EXTRA_ARGS=()
+ARGOCD_EXTRA_VALUES=()
+
+prepare_extra_ca() {
+  if [[ -z "${EXTRA_CA_FILE:-}" ]]; then
+    return
+  fi
+  if [[ ! -f "${EXTRA_CA_FILE}" ]]; then
+    log_error "EXTRA_CA_FILE ${EXTRA_CA_FILE} does not exist"
+    exit 1
+  fi
+  log "Building a CA bundle with ${EXTRA_CA_FILE}..."
+  mkdir -p "$(dirname "${CA_BUNDLE}")"
+  local system_bundle=/etc/ssl/cert.pem
+  [[ -f "${system_bundle}" ]] || system_bundle=/etc/ssl/certs/ca-certificates.crt
+  cat "${system_bundle}" "${EXTRA_CA_FILE}" > "${CA_BUNDLE}"
+  K3D_EXTRA_ARGS=(--volume "${CA_BUNDLE}:/etc/ssl/certs/ca-certificates.crt@all")
+  ARGOCD_EXTRA_VALUES=(--values "${REPO_ROOT}/bootstrap/argocd-extra-ca-values.yaml")
+}
+
+create_extra_ca_configmap() {
+  if [[ -z "${EXTRA_CA_FILE:-}" ]]; then
+    return
+  fi
+  kubectl create configmap extra-ca -n "${ARGOCD_NAMESPACE}" \
+    --from-file=ca-bundle.pem="${CA_BUNDLE}" \
+    --dry-run=client -o yaml | kubectl apply --server-side -f -
+  # Server-side apply on purpose: the bundle is bigger than the 256 KiB
+  # last-applied annotation that a client-side apply would write.
+}
+
 create_cluster() {
   log "Creating k3d cluster from ${CLUSTER_CONFIG}..."
-  
+
   if k3d cluster get homelab &> /dev/null 2>&1; then
     log "Cluster ${CLUSTER_NAME} already exists, skipping creation"
   else
-    k3d cluster create --config "${CLUSTER_CONFIG}"
+    k3d cluster create --config "${CLUSTER_CONFIG}" ${K3D_EXTRA_ARGS[@]+"${K3D_EXTRA_ARGS[@]}"}
     log "Cluster ${CLUSTER_NAME} created successfully"
   fi
   
@@ -81,12 +120,14 @@ install_argocd() {
   
   log "Creating ${ARGOCD_NAMESPACE} namespace..."
   kubectl create namespace "${ARGOCD_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
-  
+  create_extra_ca_configmap
+
   log "Installing ArgoCD Helm chart version ${ARGOCD_HELM_CHART_VERSION}..."
   helm upgrade --install argocd argo/argo-cd \
     --namespace "${ARGOCD_NAMESPACE}" \
     --version "${ARGOCD_HELM_CHART_VERSION}" \
     --values "${REPO_ROOT}/bootstrap/argocd-values.yaml" \
+    ${ARGOCD_EXTRA_VALUES[@]+"${ARGOCD_EXTRA_VALUES[@]}"} \
     --wait
   
   log "ArgoCD installed"
@@ -250,6 +291,34 @@ wait_for_tempo() {
   log "Tempo is ready"
 }
 
+deploy_beyla() {
+  log "Deploying Beyla via ArgoCD..."
+  kubectl apply -f "${REPO_ROOT}/apps/beyla/application.yaml"
+  log "Beyla Application manifest applied"
+}
+
+wait_for_beyla() {
+  log "Waiting for ArgoCD to sync Beyla..."
+
+  local timeout=300
+  local elapsed=0
+  local interval=10
+
+  until kubectl get daemonset beyla -n beyla &>/dev/null; do
+    if [[ ${elapsed} -ge ${timeout} ]]; then
+      log_error "Timed out waiting for the Beyla DaemonSet to appear"
+      kubectl get application beyla -n "${ARGOCD_NAMESPACE}" -o yaml 2>/dev/null || true
+      return 1
+    fi
+    log "  DaemonSet not yet created (${elapsed}s elapsed), retrying..."
+    sleep ${interval}
+    elapsed=$((elapsed + interval))
+  done
+
+  kubectl rollout status daemonset/beyla -n beyla --timeout=300s
+  log "Beyla is ready. Traces of the demo app show up in Grafana, Explore, Tempo."
+}
+
 cleanup() {
   log "Deleting cluster ${CLUSTER_NAME}..."
   k3d cluster delete "${CLUSTER_NAME}" || true
@@ -260,6 +329,7 @@ main() {
   log "Starting bootstrap..."
   
   check_requirements
+  prepare_extra_ca
   create_cluster
   install_argocd
   wait_for_argocd
@@ -272,7 +342,9 @@ main() {
   wait_for_loki
   deploy_tempo
   wait_for_tempo
-  
+  deploy_beyla
+  wait_for_beyla
+
   log "Bootstrap complete!"
 }
 

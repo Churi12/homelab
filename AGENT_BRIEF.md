@@ -11,8 +11,8 @@ Build a reproducible homelab as code. The end result is a Kubernetes lab that:
 1. Runs on a local cluster in Docker (k3d preferred, kind is fine), so it needs
    no real hardware and no cloud account.
 2. Uses GitOps with ArgoCD to deploy its workloads.
-3. Can be stood up from scratch with a single bootstrap script, and the same
-   steps run in GitHub Actions on every push to prove it is reproducible.
+3. Can be stood up from scratch with a single bootstrap script on the owner
+   machine. CI only validates manifests, it does not run a cluster.
 
 The owner runs nothing automatically. The owner reviews your pull request, then
 runs the code themselves on a personal machine. So clarity and safety matter
@@ -42,12 +42,11 @@ more than cleverness.
 - bootstrap/    scripts that create the cluster and install ArgoCD
 - clusters/     cluster definition (k3d config)
 - apps/         ArgoCD applications (app of apps pattern)
-- .github/workflows/   the CI workflow that stands the lab up and tears it down
+- .github/workflows/   manifest validation, no cluster
 
 This is a guide, not a rule. Improve on it if you have a better idea, and say so.
 
 ## Definition of done for the first task
 
-See the open issue. In general: a green CI run that creates a cluster, installs
-ArgoCD, and reports healthy, plus README steps a human can follow to do the same
-locally.
+See the open issue. In general: a green validation run, plus a bootstrap that the
+owner can run locally to a healthy lab, with README steps a human can follow.

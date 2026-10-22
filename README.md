@@ -1,10 +1,8 @@
 # homelab
 
-[![Launch in Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Churi12/homelab)
-
 A reproducible homelab as code. Instead of a server running 24/7, this repo
-defines a Kubernetes lab that can be stood up from scratch on demand, validated
-in CI, and torn down. The pipeline is the proof that it works.
+defines a Kubernetes lab that runs on my own machine and can be stood up from
+scratch on demand with one script, then torn down.
 
 This is a personal learning project, built outside work, to get hands-on with
 the cloud-native tools I care about: Kubernetes, GitOps with ArgoCD, and the
@@ -13,27 +11,16 @@ Grafana observability stack.
 ## Idea
 
 - Everything is declarative and lives in git.
-- A local Kubernetes cluster (k3d or kind, runs in Docker) is the target.
-- GitHub Actions stands up the cluster on every push, installs the stack,
-  checks it is healthy, then tears it down. A green run means the lab is
-  reproducible from zero.
-- You can run the exact same steps locally on your own machine.
+- A local Kubernetes cluster (k3d, runs in Docker) is the target.
+- One bootstrap script builds the whole lab from zero, so it stays reproducible.
+- CI only validates the manifests. It does not run a cluster: the lab lives on
+  a real machine, where it can be used.
 
 ## Status
 
-Cluster boots with ArgoCD running and deploys a lightweight observability stack
-(Prometheus + Grafana) via ArgoCD automatically.
-
-## Launch in Codespaces
-
-Click the Launch in Codespaces badge above to open this repo in a preconfigured
-Codespace. The devcontainer starts with Docker-in-Docker enabled, installs the
-pinned lab CLI versions (k3d v5.6.0, kubectl v1.28.6, helm v3.13.0), and runs
-`bootstrap/bootstrap.sh` automatically.
-
-After creation, the full lab should be ready in about 2 minutes, with ArgoCD,
-Grafana, and the demo app accessible from the Codespaces Ports tab. No manual
-port-forward commands are needed in Codespaces because ports are auto-forwarded.
+Cluster boots with ArgoCD running and deploys the observability stack via ArgoCD:
+Prometheus and Grafana for metrics, Loki and Alloy for logs, Tempo for traces,
+and Beyla to trace the demo app without any code change.
 
 ## What this is not
 
@@ -69,6 +56,32 @@ root app-of-apps Application so ArgoCD discovers and syncs everything in apps/.
   git clone https://github.com/Churi12/homelab.git
   cd homelab
   ./bootstrap/bootstrap.sh
+
+### Behind a TLS inspecting proxy
+
+On a company laptop the proxy re-signs every HTTPS connection with its own CA.
+Docker on the host trusts that CA, the k3d nodes do not, so every image pull in
+the lab fails with x509: certificate signed by unknown authority. Point the
+bootstrap at the proxy root CA and it mounts a combined bundle into the nodes
+and into the ArgoCD repo server:
+
+  EXTRA_CA_FILE=/path/to/proxy-root-ca.pem ./bootstrap/bootstrap.sh
+
+On macOS the CA is usually in the System keychain, for example:
+
+  security find-certificate -c "<proxy CA name>" -p /Library/Keychains/System.keychain > ~/.cache/homelab/proxy-root-ca.pem
+
+The bundle is written to ~/.cache/homelab, never into the repo.
+
+### Tracing without code: Beyla
+
+The demo app is a plain nginx with no OpenTelemetry in it. Grafana Beyla
+(apps/beyla) traces its HTTP traffic with eBPF from the kernel and sends the
+spans to Tempo, and a small load generator keeps requests coming. Open Grafana,
+Explore, Tempo, and search for service demo-app: you get one trace per request,
+GET / with status 200 and GET /missing/* with status 404, each with the pod,
+container and client attached. Beyla needs a kernel with BTF, which Docker
+Desktop has.
 
 ### Access ArgoCD
 
@@ -192,8 +205,7 @@ To manually delete the cluster, run:
   k3d cluster delete homelab
 
 The cluster persists after the bootstrap script completes, so you can continue
-to use it. In the GitHub Actions workflow, the cluster is automatically deleted
-to keep the environment clean.
+to use it.
 
 ## Code quality
 
@@ -239,9 +251,9 @@ one small PR per group of updates rather than a single unreviewable bump:
 - major bumps are never grouped, so a breaking one is easy to close or revert
 
 Renovate only proposes. CI is the gate that decides: every bump PR runs the
-manifest validation job and the full bootstrap job, so a chart version that no
-longer renders, or a k3s image the lab cannot boot on, fails before merge rather
-than after.
+manifest validation job, so a chart version that no longer renders fails before
+merge. Whether the lab still boots on a new k3s image is checked by running the
+bootstrap locally.
 
 Because Renovate can only bump a version where it can see it, versions live in
 one place per tool: the env block, or a with: version key, or the pin in the

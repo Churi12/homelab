@@ -1,0 +1,15 @@
+# Extra values for ArgoCD, used only when EXTRA_CA_FILE is set.
+# The repo server is the part of ArgoCD that talks to GitHub and to the Helm
+# chart repositories. Behind a TLS inspecting proxy it needs to trust the
+# proxy CA, so we mount the combined CA bundle over the default one.
+# The bootstrap script creates the extra-ca ConfigMap before installing ArgoCD.
+repoServer:
+  volumes:
+    - name: extra-ca
+      configMap:
+        name: extra-ca
+  volumeMounts:
+    - name: extra-ca
+      mountPath: /etc/ssl/certs/ca-certificates.crt
+      subPath: ca-bundle.pem
+      readOnly: true
